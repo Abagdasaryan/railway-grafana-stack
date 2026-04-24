@@ -10,7 +10,7 @@ prune: false
 datasources:
   - name: Loki
     type: loki
-    access: direct
+    access: proxy
     orgId: 1
     uid: grafana_lokiq
     url: $LOKI_INTERNAL_URL
@@ -20,6 +20,15 @@ datasources:
     basicAuthUser:
     withCredentials:
     isDefault: true
+    jsonData:
+      derivedFields:
+        - name: trace_id
+          matcherType: regex
+          matcherRegex: '"trace_id":"([a-f0-9]+)"'
+          url: '$${__value.raw}'
+          datasourceUid: grafana_tempo
+          urlDisplayLabel: View trace
+
   - name: Prometheus
     type: prometheus
     access: proxy
@@ -32,6 +41,11 @@ datasources:
     basicAuthUser:
     withCredentials:
     isDefault: false
+    jsonData:
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: grafana_tempo
+
   - name: Tempo
     type: tempo
     access: proxy
@@ -44,3 +58,32 @@ datasources:
     basicAuthUser:
     withCredentials:
     isDefault: false
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: grafana_lokiq
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        tags:
+          - key: service.name
+            value: service_name
+        filterByTraceID: true
+        customQuery: true
+        query: '{service_name="$${__tags["service.name"]}"} | json | trace_id=`$${__span.traceId}`'
+      tracesToMetrics:
+        datasourceUid: grafana_prometheus
+        spanStartTimeShift: '-5m'
+        spanEndTimeShift: '5m'
+        tags:
+          - key: service.name
+            value: service
+        queries:
+          - name: Request rate for span
+            query: 'sum(rate(traces_spanmetrics_calls_total{$$__tags, span_name="$${__span.name}"}[5m]))'
+          - name: P95 latency for span
+            query: 'histogram_quantile(0.95, sum by (le) (rate(traces_spanmetrics_latency_bucket{$$__tags, span_name="$${__span.name}"}[5m])))'
+      serviceMap:
+        datasourceUid: grafana_prometheus
+      nodeGraph:
+        enabled: true
+      lokiSearch:
+        datasourceUid: grafana_lokiq
