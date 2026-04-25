@@ -5,12 +5,34 @@ FROM apache/superset:${VERSION}
 USER root
 
 COPY superset_config.py /app/pythonpath/superset_config.py
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh && \
+
+# Inline startup script — avoids COPY-of-sh issues on some BuildKit setups.
+RUN printf '#!/bin/bash\n\
+set -e\n\
+export SUPERSET_HOME="${SUPERSET_HOME:-/app/superset_home}"\n\
+mkdir -p "$SUPERSET_HOME"\n\
+superset db upgrade\n\
+if [ -n "$SUPERSET_ADMIN_PASSWORD" ]; then\n\
+  superset fab create-admin \\\n\
+    --username "${SUPERSET_ADMIN_USERNAME:-admin}" \\\n\
+    --firstname Admin --lastname User \\\n\
+    --email "${SUPERSET_ADMIN_EMAIL:-admin@local}" \\\n\
+    --password "$SUPERSET_ADMIN_PASSWORD" || echo "admin exists"\n\
+fi\n\
+if [ ! -f "$SUPERSET_HOME/.examples_loaded" ]; then\n\
+  superset load-examples --force || true\n\
+  touch "$SUPERSET_HOME/.examples_loaded"\n\
+fi\n\
+superset init\n\
+PORT="${PORT:-8088}"\n\
+exec gunicorn --bind "0.0.0.0:${PORT}" \\\n\
+  --access-logfile - --error-logfile - \\\n\
+  --workers 2 --worker-class gthread --threads 20 --timeout 120 \\\n\
+  "superset.app:create_app()"\n' > /app/start.sh && \
+    chmod +x /app/start.sh && \
     chown -R superset:superset /app/pythonpath /app/start.sh
 
 ENV PYTHONPATH=/app/pythonpath:$PYTHONPATH
 
 USER superset
-
 CMD ["/app/start.sh"]
