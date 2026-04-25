@@ -4,6 +4,9 @@ FROM apache/superset:${VERSION}
 
 USER root
 
+# Forecasting (Prophet) for time-series charts. Requires C++ build deps for cmdstanpy.
+RUN pip install --no-cache-dir prophet==1.1.5
+
 COPY superset_config.py /app/pythonpath/superset_config.py
 
 # Inline startup script — avoids COPY-of-sh issues on some BuildKit setups.
