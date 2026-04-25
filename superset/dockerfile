@@ -4,8 +4,14 @@ FROM apache/superset:${VERSION}
 
 USER root
 
-# Forecasting (Prophet) for time-series charts. Requires C++ build deps for cmdstanpy.
-RUN pip install --no-cache-dir prophet==1.1.5
+# Forecasting (Prophet) for time-series charts.
+# The `stan_backend` attribute error happens when prophet's compiled model isn't
+# bundled. Installing cmdstanpy + holidays first then prophet 1.1.6 (which ships
+# manylinux wheels with the model pre-compiled) fixes it.
+RUN pip install --no-cache-dir \
+        cmdstanpy==1.2.4 \
+        holidays==0.45 \
+        prophet==1.1.6
 
 COPY superset_config.py /app/pythonpath/superset_config.py
 
