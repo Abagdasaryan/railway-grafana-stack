@@ -1,0 +1,16 @@
+ARG VERSION=4.0.2
+
+FROM apache/superset:${VERSION}
+
+USER root
+
+COPY superset_config.py /app/pythonpath/superset_config.py
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh && \
+    chown -R superset:superset /app/pythonpath /app/start.sh
+
+ENV PYTHONPATH=/app/pythonpath:$PYTHONPATH
+
+USER superset
+
+CMD ["/app/start.sh"]
